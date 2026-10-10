@@ -11,3 +11,65 @@ $('cam').onclick=async()=>{try{if(!navigator.mediaDevices?.getUserMedia)throw Er
 $('stop').onclick=()=>{if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('video').srcObject=null;say('Cámara detenida.')};
 $('sos').onclick=()=>{const phone=$('phone').value.trim();if(!/^\+?[0-9 ()-]{7,20}$/.test(phone)){say('Introduce un número de teléfono válido antes de preparar el mensaje.');return}let msg='Necesito ayuda. Por favor, llámame.';if(position){const {latitude,longitude,accuracy}=position.coords;msg+=` Mi última ubicación aproximada (precisión estimada ${Math.round(accuracy)} m): https://maps.google.com/?q=${latitude},${longitude}`;}if(!confirm(`¿Abrir Mensajes para ${phone}? El mensaje NO se enviará automáticamente.`))return;const sep=/iPad|iPhone|iPod/.test(navigator.userAgent)?'&':'?';window.location.href=`sms:${phone}${sep}body=${encodeURIComponent(msg)}`;say('Se intentó abrir Mensajes. Verifica destinatario y contenido antes de enviar.')};
 window.addEventListener('pagehide',()=>{if(stream)stream.getTracks().forEach(t=>t.stop())});
+let visionModel = null;
+let visionRunning = false;
+async function loadVisionAI() {
+  try {
+    speak("Cargando inteligencia visual.");
+    visionModel = await cocoSsd.load();
+    speak("Inteligencia visual lista.");
+    console.log("AI Vision Assist: modelo cargado");
+  } catch (error) {
+    console.error("Error cargando IA:", error);
+    speak("No pude cargar la inteligencia visual.");
+  }
+}
+
+async function analyzeCameraFrame() {
+  if (!visionRunning || !visionModel) return;
+
+  const video = document.querySelector("video");
+
+  if (!video || video.readyState < 2) {
+    requestAnimationFrame(analyzeCameraFrame);
+    return;
+  }
+
+  try {
+    const predictions = await visionModel.detect(video);
+
+    const usefulObjects = predictions
+      .filter(item => item.score >= 0.65)
+      .sort((a, b) => b.score - a.score);
+
+    if (usefulObjects.length > 0) {
+      const object = usefulObjects[0];
+
+      console.log(
+        `Detectado: ${object.class} ${Math.round(object.score * 100)}%`
+      );
+    }
+  } catch (error) {
+    console.error("Error analizando cámara:", error);
+  }
+
+  setTimeout(analyzeCameraFrame, 500);
+}
+
+function startVisionAI() {
+  if (!visionModel) {
+    speak("La inteligencia visual todavía se está cargando.");
+    return;
+  }
+
+  visionRunning = true;
+  speak("Visión inteligente activada.");
+  analyzeCameraFrame();
+}
+
+function stopVisionAI() {
+  visionRunning = false;
+  speak("Visión inteligente detenida.");
+}
+
+window.addEventListener("load", loadVisionAI);
